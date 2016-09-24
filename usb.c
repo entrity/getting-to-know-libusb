@@ -15,7 +15,7 @@ void fatal(int code, char * msg)
 	}
 }
 
-libusb_device * open_dev(libusb_device * dev)
+libusb_device_handle * open_dev(libusb_device * dev)
 {
 	int ret;
 	libusb_device_handle * handle = NULL;
@@ -35,8 +35,10 @@ libusb_device * open_dev(libusb_device * dev)
 			fatal(ret == 0, "mfr");
 			printf("Manufacturer : %s\n", buff);
 		}
+
 		#endif
 	}
+	return LIBUSB_SUCCESS == ret ? handle : NULL;
 }
 
 /* Open USB device and return */
@@ -47,9 +49,10 @@ libusb_device * find_dev(int vid, int pid)
 	libusb_device * out = NULL;
 	struct libusb_device_descriptor desc;
 	fatal(!n, "Count is 0");
+	#ifdef DEBUGV
 	printf("count is %lu\n", n);
+	#endif
 	for (i = 0; i < n; i++) {
-		printf("%lu\n", i);
 		libusb_get_device_descriptor(list[i], &desc);
 		if (desc.idVendor == vid && desc.idProduct == pid) {
 			out = list[i];
@@ -64,6 +67,12 @@ libusb_device * find_dev(int vid, int pid)
 	return out;
 }
 
+void handle_dev(libusb_device_handle *handle)
+{
+
+}
+
+/* Diagnostic utility */
 static void print(libusb_device * dev)
 {
 	struct libusb_device_descriptor desc;
@@ -89,11 +98,41 @@ static void print(libusb_device * dev)
 			fatal(ret == 0, "mfr");
 			printf("%s\n", string);
 		}
+
 	}
 	if (handle) libusb_close(handle);
+}
+
+/* Diagnostic utility */
+void debug(libusb_device * dev)
+{
+	int ret, i, j, k, l;
+	struct libusb_device_descriptor desc;
+	ret = libusb_get_device_descriptor(dev, &desc);
+	fatal(ret, "get device descriptor");
+	
+	printf("\tconf | intf | altset | endpt :: eaddr\n");
+
+	for (i = 0; i < desc.bNumConfigurations; i++) {
+		struct libusb_config_descriptor *config;
+		ret = libusb_get_config_descriptor(dev, i, &config);
+		fatal(ret, "libusb_get_config_descriptor");
+		for (j = 0; j < config->bNumInterfaces; j++) {
+			struct libusb_interface *interface = &config->interface[j];
+			for (k = 0; k < interface->num_altsetting; k++) {
+				struct libusb_interface_descriptor *idesc = &interface->altsetting[k];
+				for (l = 0; l < idesc->bNumEndpoints; l++) {
+					struct libusb_endpoint_descriptor *endpoint = &idesc->endpoint[l];
+					int max_size = libusb_get_max_iso_packet_size(dev, endpoint->bEndpointAddress);
+					printf("\t %d | %d | %d | %d :: %02x %d :: %d\n", i, j, k, l, endpoint->bEndpointAddress, endpoint->bEndpointAddress, max_size);
+				}
+			}
+		}
+	}
 	
 }
 
+/* Diagnostic utility */
 void ls()
 {
 	ssize_t i = 0;
@@ -112,13 +151,18 @@ void ls()
 int main(int argc, char * argv[])
 {
 	int rc;
+	#ifdef DEBUG
 	printf("starting\n");
+	#endif
 	// init libusb
 	rc = libusb_init(NULL);
 	fatal(rc, "libusb_init");
 	// diag
-	open_dev(find_dev(0x0582, 0x0073));
-	// ls();
+
+	// libusb_device_handle * handle = libusb_open_device_with_vid_pid(NULL, 0x0582, 0x0073);
+	// handle_dev(handle);
+	debug(find_dev(0x0582, 0x0073));
+
 	// de-init libusb
 	libusb_exit(NULL);
 	return 0;
