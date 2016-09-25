@@ -12,6 +12,7 @@
 #define DEBUG
 #define VID 0x0582
 #define PID 0x0073
+#define EPT 0x01
 
 libusb_device ** list;
 libusb_device_handle *handle;
@@ -188,7 +189,7 @@ static struct libusb_transfer *alloc_capture_transfer(void)
 
 	fatal(!transfer, "transfer alloc failure");
 	transfer->dev_handle = handle;
-	transfer->endpoint = 0x01;
+	transfer->endpoint = EPT;
 	transfer->type = LIBUSB_TRANSFER_TYPE_ISOCHRONOUS;
 	transfer->timeout = 5000;
 	transfer->buffer = malloc(bufflen);
