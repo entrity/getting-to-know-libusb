@@ -173,8 +173,8 @@ static void capture_callback(struct libusb_transfer *transfer)
 		}
 		if (desc->actual_length != PKT_SIZE)
 			printf("unexpected data length %d vs %d\n", desc->actual_length, PKT_SIZE);
-		// fwrite(transfer->buffer + (i * PKT_SIZE), 1, desc->actual_length, outfile);
-		write(1, transfer->buffer + (i * PKT_SIZE), desc->actual_length);
+		fwrite(transfer->buffer + (i * PKT_SIZE), desc->actual_length, 1, outfile);
+		// write(1, transfer->buffer + (i * PKT_SIZE), desc->actual_length);
 	}
 	if (!aborted) libusb_submit_transfer(transfer);
 }
@@ -237,7 +237,7 @@ void read_dev()
 	r = libusb_set_interface_alt_setting(handle, intf_i, alts_i);
 	fatal(r, "libusb_set_interface_alt_setting");
 	// open outfile
-	fopen("raw.pcm", "wb");
+	outfile = fopen("raw.pcm", "wb");
 	// submit transfers
 	struct libusb_transfer *tx1 = alloc_capture_transfer();
 	struct libusb_transfer *tx2 = alloc_capture_transfer();
@@ -252,7 +252,7 @@ void read_dev()
 			break;
 
 	// release
-	close(outfile);
+	fclose(outfile);
 	r = libusb_set_interface_alt_setting(handle, intf_i, 0);
 	fatal(r, "libusb_set_interface_alt_setting 0");
 	libusb_close(handle);
