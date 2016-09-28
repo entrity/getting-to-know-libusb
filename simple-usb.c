@@ -8,27 +8,33 @@
 #include <string.h>
 #include <libusb-1.0/libusb.h>
 #include <signal.h>
+#include <time.h>
 
 #define DEBUG
 #define VID 0x0582
 #define PID 0x0073
-#define EPT 0x01
+#define EPT 0x082
+#define NUM_ISO_PACKETS 10
+#define PKT_SIZE 192
 
 libusb_device ** list;
 libusb_device_handle *handle;
 static int aborted = 0;
 FILE * outfile;
 
-void fatal(int code, char * msg)
+void fatal(int code, char * msg, int line)
 {
 	if (code) {
-		dprintf(2, "ERR %d : %s\n", code, msg);
+		dprintf(2, "ERR %d : %d : %s\n", code, line, msg);
 		exit(code);
 	}
 }
 
-#define NUM_ISO_PACKETS 10
-#define PKT_SIZE 192
+void timer_callback(union sigval val)
+{
+	aborted = 1;
+	printf("Timer fired\n");
+}
 
 static void capture_callback(struct libusb_transfer *transfer)
 {
@@ -58,7 +64,7 @@ static struct libusb_transfer *alloc_capture_transfer(void)
 	int i;
 	struct libusb_transfer *transfer = libusb_alloc_transfer(NUM_ISO_PACKETS);
 
-	fatal(!transfer, "transfer alloc failure");
+	fatal(!transfer, "transfer alloc failure", __LINE__);
 	transfer->dev_handle = handle;
 	transfer->endpoint = EPT;
 	transfer->type = LIBUSB_TRANSFER_TYPE_ISOCHRONOUS;
@@ -100,24 +106,24 @@ void read_dev()
 	int r;
 	// get handle
 	handle = libusb_open_device_with_vid_pid(NULL, VID, PID);
-	fatal(handle == NULL, "no matching device found");
+	fatal(handle == NULL, "no matching device found", __LINE__);
 	// claim interface, connect
 	int intf_i = 1;
 	int alts_i = 1;
 	r = libusb_detach_kernel_driver(handle, intf_i); // okay to fail b/c the driver may already have been detached
 	r = libusb_claim_interface(handle, intf_i);
-	fatal(r, "libusb_claim_interface");
+	fatal(r, "libusb_claim_interface", __LINE__);
 	r = libusb_set_interface_alt_setting(handle, intf_i, alts_i);
-	fatal(r, "libusb_set_interface_alt_setting");
+	fatal(r, "libusb_set_interface_alt_setting", __LINE__);
 	// open outfile
 	outfile = fopen("raw.pcm", "wb");
 	// submit transfers
 	struct libusb_transfer *tx1 = alloc_capture_transfer();
 	struct libusb_transfer *tx2 = alloc_capture_transfer();
 	r = libusb_submit_transfer(tx1);
-	fatal(r, "transfer submit 1");
+	fatal(r, "transfer submit 1", __LINE__);
 	r = libusb_submit_transfer(tx2);
-	fatal(r, "transfer submit 2");
+	fatal(r, "transfer submit 2", __LINE__);
 
 	// wait until xfers complete
 	while (!aborted)
@@ -127,7 +133,7 @@ void read_dev()
 	// release
 	fclose(outfile);
 	r = libusb_set_interface_alt_setting(handle, intf_i, 0);
-	fatal(r, "libusb_set_interface_alt_setting 0");
+	fatal(r, "libusb_set_interface_alt_setting 0", __LINE__);
 	libusb_close(handle);
 }
 
@@ -154,9 +160,21 @@ int main(int argc, char * argv[])
 	sigaction(SIGTERM, &sigact, NULL);
 	sigaction(SIGQUIT, &sigact, NULL);
 
+	// timer
+	struct sigevent sige;
+	sige.sigev_notify = SIGEV_THREAD;
+	sige.sigev_notify_function = timer_callback;
+	timer_t timerid;
+	rc = timer_create(CLOCK_REALTIME, &sige, &timerid);
+	fatal(rc, "timer_create failed", __LINE__);
+	struct itimerspec its;
+	its.it_value.tv_sec = its.it_interval.tv_sec = 1;
+	its.it_value.tv_sec = its.it_interval.tv_sec = 0;
+	rc = timer_settime(timerid, 0, &its, NULL);
+
 	// init libusb
 	rc = libusb_init(NULL);
-	fatal(rc, "libusb_init");
+	fatal(rc, "libusb_init", __LINE__);
 
 	// take action
 	read_dev();
