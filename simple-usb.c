@@ -13,7 +13,7 @@
 #define DEBUG
 #define VID 0x0582
 #define PID 0x0073
-#define EPT 0x082
+#define EPT 0x01
 #define NUM_ISO_PACKETS 10
 #define PKT_SIZE 192
 
@@ -21,6 +21,7 @@ libusb_device ** list;
 libusb_device_handle *handle;
 static int aborted = 0;
 FILE * outfile;
+timer_t timerid;
 
 void fatal(int code, char * msg, int line)
 {
@@ -39,7 +40,7 @@ void timer_callback(union sigval val)
 static void capture_callback(struct libusb_transfer *transfer)
 {
 	int i;
-	printf("cap cb stat %d\n", transfer->status);
+	// printf("cap cb stat %d\n", transfer->status);
 
 	for (i = 0; i < NUM_ISO_PACKETS; i++) {
 		struct libusb_iso_packet_descriptor *desc =
@@ -162,14 +163,13 @@ int main(int argc, char * argv[])
 
 	// timer
 	struct sigevent sige;
+	struct itimerspec its;
 	sige.sigev_notify = SIGEV_THREAD;
-	sige.sigev_notify_function = timer_callback;
-	timer_t timerid;
+	sige.sigev_notify_function = &timer_callback;
 	rc = timer_create(CLOCK_REALTIME, &sige, &timerid);
 	fatal(rc, "timer_create failed", __LINE__);
-	struct itimerspec its;
 	its.it_value.tv_sec = its.it_interval.tv_sec = 1;
-	its.it_value.tv_sec = its.it_interval.tv_sec = 0;
+	its.it_value.tv_nsec = its.it_interval.tv_nsec = 0;
 	rc = timer_settime(timerid, 0, &its, NULL);
 
 	// init libusb
