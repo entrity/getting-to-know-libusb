@@ -13,7 +13,9 @@
 #define DEBUG
 #define VID 0x0582
 #define PID 0x0073
-#define EPT 0x01
+#define EPT 0x82
+#define ITF 2
+#define ALT 1
 #define NUM_ISO_PACKETS 10
 #define PKT_SIZE 192
 
@@ -109,8 +111,8 @@ void read_dev()
 	handle = libusb_open_device_with_vid_pid(NULL, VID, PID);
 	fatal(handle == NULL, "no matching device found", __LINE__);
 	// claim interface, connect
-	int intf_i = 1;
-	int alts_i = 1;
+	int intf_i = ITF;
+	int alts_i = ALT;
 	r = libusb_detach_kernel_driver(handle, intf_i); // okay to fail b/c the driver may already have been detached
 	r = libusb_claim_interface(handle, intf_i);
 	fatal(r, "libusb_claim_interface", __LINE__);
